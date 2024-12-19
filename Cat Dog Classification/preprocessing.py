@@ -1,92 +1,72 @@
 # Import necessary libraries 
 import os
 import cv2
-import filetype
+import magic
 from concurrent.futures import ThreadPoolExecutor
 from config import Config
 
-
-def unzip_folder(folder_name):
-    """
-    TODO.
-    Currently, i have unzipped the folder myself but i want to automate this process
-    _summary_
-
-    Args:
-        folder_name (_type_): _description_
-        
-    Returns:
-        type
-    """
-    
-    
 def validate_image(image_path):
     """
-    Validates an image file by checking its file type and file readability,
-    and re-encoding the image to detect potential issues.
-    Image file is removed if it fails any of these tests.
+    Validates an image file by checking its MIME type using python-magic.
+    Only allows JPEG and JPG files. Removes the file if it is invalid.
+    Also checks if the image can be successfully loaded using OpenCV.
 
     Args:
         image_path (str): Path to the image file.
-        
+
     Raises:
         Exception: If an error occurs while reading the file.
     """
-    
-    image_exts = {"jpeg", "jpg", "bmp", "png"}
-    
-    try:  
-        # Check file type using filetype library
-        kind = filetype.guess(image_path)
+    try:
+        # Use python-magic to check MIME type
+        mime = magic.Magic(mime=True)
+        file_type = mime.from_file(image_path)
 
-        if not kind or kind.extension not in image_exts:
-            print(f"Image not in the ext list: {image_path}")
+        if file_type not in ["image/jpeg"]:
+            print(f"Invalid file type: {image_path} ({file_type})")
             os.remove(image_path)
-            return
+            return False
 
-        # Load image to ensure its readable
+        # Check if the image can be loaded using OpenCV
         img = cv2.imread(image_path)
-        
         if img is None:
             print(f"Unreadable image: {image_path}")
             os.remove(image_path)
-            return
-            
-        # Force re-encoding to detect potential issues
-        success, encoded_image = cv2.imencode(".jpg", img)
-        if not success:
-            print(f"Corrupt JPEG data detected during re-encoding: {image_path}")
-            os.remove(image_path)
-            
+            return False
+
+        return True
+
     except Exception as e:
         print(f"Error processing image {image_path}: {e}")
         os.remove(image_path)
-
+        return False
 
 def clean_dataset(data_dir):
     """
-    Cleans a dataset directory by validating and removing corrupted/invalid images.
+    Cleans a dataset directory by validating and removing invalid images.
 
     Args:
         data_dir (str): Path to the root directory of the dataset.
                         Each subdirectory should correspond to a class of images
     """
+    validated_count = 0
     
-    # ThreadPoolExecutor is used to parallelise the process
     with ThreadPoolExecutor() as executor:
+        futures = []
         for image_class in os.listdir(data_dir):
             class_path = os.path.join(data_dir, image_class)
-            
-            # Validates each image using validate_image function
+
+            # Submit each image validation task to the executor
             for image in os.listdir(class_path):
                 image_path = os.path.join(class_path, image)
-                executor.submit(validate_image, image_path)
-    
+                futures.append(executor.submit(validate_image, image_path))
+
+        for future in futures:
+            if future.result():
+                validated_count += 1
+
+    print(f"Total validated files: {validated_count}")
 
 # Main execution
 if __name__ == "__main__":
     clean_dataset(Config.RAW_DATA_DIR)
-    
-    
-    
-    
