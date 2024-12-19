@@ -2,18 +2,21 @@
 import numpy as np
 import tensorflow as tf
 from config import Config
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, Rescaling
+
+from tensorflow import keras
+from keras import layers
+from keras.models import Sequential
 
 
-def load_data(data_dir, img_height = 256, img_width = 256, batch_size = 32):
+def load_data(data_dir, img_height, img_width, batch_size = 32):
     """
     Prepares the training and validation datasets from the provided directory.
 
     Args:
         data_dir (str): Path to the dataset directory.
-        img_height (int, optional): Height of the images. Defaults to 256.
-        img_width (int, optional): Width of the images. Defaults to 256.
-        batch_size (int, optional): Number of images per batch. Defaults to 32.
+        img_height (int): Height of the images.
+        img_width (int): Width of the images.
+        batch_size (int): Number of images per batch. Defaults to 32.
     
     Returns:
         tuple: Prepared training and validation datasets
@@ -38,11 +41,11 @@ def load_data(data_dir, img_height = 256, img_width = 256, batch_size = 32):
     )
     
     # Configure datasets for performance
-    AUTOTUNE =  tf.data.AUTOTUNE
-    train_ds = train_ds.prefetch(buffer_size=AUTOTUNE).cache()
-    val_ds = val_ds.prefetch(buffer_size=AUTOTUNE).cache()
+    train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE) # type: ignore
+    val_ds = val_ds.cache().prefetch(tf.data.AUTOTUNE) # type: ignore
     
     return train_ds, val_ds
+
 
 def build_model(img_height, img_width, num_classes):
     
@@ -58,17 +61,17 @@ def build_model(img_height, img_width, num_classes):
         tf.keras.Model: Compiled CNN model.
     """
     
-    model = tf.keras.Sequential([
-        Rescaling(1./255, input_shape = (img_height, img_width, 3)),
-        Conv2D(32, 3, activation = 'relu'),
-        MaxPooling2D(),
-        Conv2D(32, 3, activation = 'relu'),
-        MaxPooling2D(),
-        Conv2D(32, 3, activation = 'relu'),
-        MaxPooling2D(),
-        Flatten(),
-        Dense(128, activation = 'relu'),
-        Dense(num_classes)                  
+    model = Sequential([
+        layers.Rescaling(1./255, input_shape = (img_height, img_width, 3)),
+        layers.Conv2D(16, 3, activation = 'relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(32, 3, activation = 'relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(64, 3, activation = 'relu'),
+        layers.MaxPooling2D(),
+        layers.Flatten(),
+        layers.Dense(128, activation = 'relu'),
+        layers.Dense(num_classes)           
     ])
     
     model.compile(
@@ -115,14 +118,13 @@ def save_model(model, save_path):
 
 if __name__ == "__main__":
     try:
-        # Load configuration
+        # Load configuration parameters
         data_dir = Config.RAW_DATA_DIR
         save_dir = Config.SAVE_DIR
-        
-        # Configuration parameters
-        batch_size = 32
-        img_height = 180
-        img_width = 180 
+        batch_size = Config.BATCH_SIZE
+        img_height = Config.IMG_HEIGHT
+        img_width = Config.IMG_WIDTH
+        epochs = Config.EPOCHS 
     
         # Prepare datasets
         train_ds, val_ds = load_data(data_dir, img_height, img_width, batch_size)
@@ -132,7 +134,7 @@ if __name__ == "__main__":
         model = build_model(img_height, img_width, num_classes)
         
         # Train model
-        history = train_model(model, train_ds, val_ds, epochs = 3)
+        history = train_model(model, train_ds, val_ds, epochs)
         
         # Save the trained model
         save_model(model, save_dir)
