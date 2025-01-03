@@ -1,1 +1,1 @@
-# cat-dog-classification-cnn
+# cat-dog-classification-cnn (ongoing project)
